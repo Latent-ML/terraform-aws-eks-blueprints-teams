@@ -1,3 +1,4 @@
+
 variable "name" {
   description = "A common name used across resources created unless a more specific resource name is provdied"
   type        = string
@@ -48,8 +49,22 @@ variable "cluster_role_name" {
   default     = ""
 }
 
+variable "cluster_role_rule" {
+  description = "Configuration for the cluster role rule"
+  type = object({
+    api_groups = list(string)
+    resources  = list(string)
+    verbs      = list(string)
+  })
+  default = {
+    api_groups = [""]
+    resources  = ["namespaces", "nodes"]
+    verbs      = ["get", "list", "watch"]
+  }
+}
+
 ################################################################################
-# K8s Cluster Role
+# K8s Role
 ################################################################################
 
 variable "create_role" {
@@ -62,6 +77,18 @@ variable "role_name" {
   description = "Name to use on Kubernetes role created"
   type        = string
   default     = ""
+}
+
+variable "role_ref" {
+  description = "Reference to the role"
+  type = object({
+    kind = string
+    name = string
+  })
+  default = {
+    kind = "ClusterRole"
+    name = "view"
+  }
 }
 
 ################################################################################
