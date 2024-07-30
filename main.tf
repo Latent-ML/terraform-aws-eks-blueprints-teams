@@ -1,7 +1,5 @@
-################################################################################
-# K8s Namespace
-################################################################################
 
+# Kubernetes Namespace
 resource "kubernetes_namespace_v1" "this" {
   for_each = { for k, v in var.namespaces : k => v if try(v.create, true) }
 
@@ -12,10 +10,7 @@ resource "kubernetes_namespace_v1" "this" {
   }
 }
 
-################################################################################
-# K8s Network Policy
-################################################################################
-
+# Kubernetes Network Policy
 resource "kubernetes_network_policy_v1" "this" {
   for_each = { for k, v in var.namespaces : k => v if try(v.create, true) && length(try(v.network_policy, {})) > 0 }
 
@@ -27,7 +22,6 @@ resource "kubernetes_network_policy_v1" "this" {
   }
 
   spec {
-
     dynamic "ingress" {
       for_each = try(each.value.network_policy.ingress, [])
 
@@ -182,10 +176,7 @@ resource "kubernetes_network_policy_v1" "this" {
   }
 }
 
-################################################################################
-# K8s Service Account
-################################################################################
-
+# Kubernetes Service Account
 resource "kubernetes_service_account_v1" "this" {
   for_each = { for k, v in var.namespaces : k => v if try(v.create, true) && try(v.create_service_account, true) }
 
@@ -236,10 +227,7 @@ resource "kubernetes_secret_v1" "service_account_token" {
   type = "kubernetes.io/service-account-token"
 }
 
-################################################################################
-# K8s Resource Quota
-################################################################################
-
+# Kubernetes Resource Quota
 resource "kubernetes_resource_quota_v1" "this" {
   for_each = { for k, v in var.namespaces : k => v if try(v.create, true) && length(try(v.resource_quota, {})) > 0 }
 
@@ -272,10 +260,7 @@ resource "kubernetes_resource_quota_v1" "this" {
   }
 }
 
-################################################################################
-# K8s Limit Range
-################################################################################
-
+# Kubernetes Limit Range
 resource "kubernetes_limit_range_v1" "this" {
   for_each = { for k, v in var.namespaces : k => v if try(v.create, true) && length(try(v.limit_range, {})) > 0 }
 
@@ -302,10 +287,7 @@ resource "kubernetes_limit_range_v1" "this" {
   }
 }
 
-################################################################################
-# K8s Cluster Role
-################################################################################
-
+# Kubernetes Cluster Role
 resource "kubernetes_cluster_role_v1" "this" {
   count = var.create_cluster_role && !var.enable_admin ? 1 : 0
 
@@ -317,11 +299,17 @@ resource "kubernetes_cluster_role_v1" "this" {
 
   rule {
     api_groups = [""]
-    resources  = ["namespaces", "nodes"]
+    resources  = ["pods", "configmaps", "secrets", "services", "namespaces", "nodes"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    api_groups = ["apps"]
+    resources  = ["deployments", "statefulsets", "daemonsets", "replicasets"]
     verbs      = ["get", "list", "watch"]
   }
 }
-
+# Kubernetes Cluster Role Binding
 resource "kubernetes_cluster_role_binding_v1" "this" {
   count = var.create_cluster_role && !var.enable_admin ? 1 : 0
 
@@ -345,10 +333,7 @@ resource "kubernetes_cluster_role_binding_v1" "this" {
   }
 }
 
-################################################################################
-# K8s Role Binding
-################################################################################
-
+# Kubernetes Role Binding
 resource "kubernetes_role_binding_v1" "this" {
   for_each = { for k, v in var.namespaces : k => v if var.create_role && !var.enable_admin }
 
@@ -365,21 +350,17 @@ resource "kubernetes_role_binding_v1" "this" {
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "ClusterRole"
-    name      = "view"
+    name      = kubernetes_cluster_role_v1.this[0].metadata[0].name
   }
 
   subject {
-    kind      = "Group"
-    name      = var.name
-    api_group = "rbac.authorization.k8s.io"
+    kind      = "ServiceAccount"
+    name      = try(each.value.service_account.name, each.key)
     namespace = try(each.value.create, true) ? kubernetes_namespace_v1.this[each.key].metadata[0].name : each.key
   }
 }
 
-################################################################################
 # IAM Role
-################################################################################
-
 locals {
   iam_role_name = coalesce(var.iam_role_name, var.name)
 }
@@ -458,10 +439,7 @@ resource "aws_iam_role_policy_attachment" "this" {
   role       = aws_iam_role.this[0].name
 }
 
-################################################################################
 # Admin IAM Role Policy
-################################################################################
-
 locals {
   admin_policy_name = coalesce(var.admin_policy_name, local.iam_role_name)
 
